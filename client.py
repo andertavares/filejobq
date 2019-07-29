@@ -33,10 +33,19 @@ class Client(object):
                     self.mark_finished()
                     self.job = None
                     self.job_command = None
+                else: # job is running, wait a bit
+                    time.sleep(1)
+                    continue
 
             # looks for a job
+            else:
+                self.job = self.find_job()
 
 
+
+    def find_job(self):
+
+        self.lock()
 
 
         subprocess.Popen(
@@ -44,6 +53,9 @@ class Client(object):
             % (experiment_config, output_prefix, str(total_runs).zfill(2), additional_args),
             shell=True
         )
+
+        self.unlock()
+
 
     def mark_finished(self):
 
