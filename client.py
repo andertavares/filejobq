@@ -47,7 +47,13 @@ class Client(object):
 
         self.lock()
 
+        # grabs a job
+        todo_handler = open(self.todo, 'r')
+        if todo_handler.readline(4096) is None or todo_handler.readline() == '':
+            todo_handler.close()
+            return None # no job in file
 
+        # grabs the job, starts it and returns it
         subprocess.Popen(
             './rlexperiment.sh -c %s -o %s/rep%s %s' \
             % (experiment_config, output_prefix, str(total_runs).zfill(2), additional_args),
@@ -56,23 +62,30 @@ class Client(object):
 
         self.unlock()
 
-
     def mark_finished(self):
 
         self.lock()
 
-        read_handler = open(self.in_progress, 'r')
-
-        # removes the command in doing.txt
-        running = [line.trim() for line in read_handler.readlines()]
-        running.remove(self.job_command)
-        read_handler.close()
-
-        rewrite_handler = open(self.in_progress, 'w')
-        rewrite_handler.writelines(running)
-        rewrite_handler.close()
+        self.move(self.job_command, self.in_progress, self.done)
 
         self.unlock()
+
+    # moves a line from file1 to file2
+    def move(self, line_to_move, file_name1, file_name2):
+
+        # removes the line in file1 (opens, removes, rewrites)
+        read_handler = open(file_name1, 'r')
+        to_remove = [line.trim() for line in read_handler.readlines()]
+        to_remove.remove(line_to_move)
+        read_handler.close()
+
+        rewrite_handler = open(file_name1, 'w')
+        rewrite_handler.writelines(line_to_move)
+        rewrite_handler.close()
+
+        # appends the line to file2
+        file2_handler = open(file_name2, 'a')
+        file2_handler.writelines([line_to_move])
 
     def lock(self):
         while os.path.exists(self.lock_file): # waits until the directory is free
