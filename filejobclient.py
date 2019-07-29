@@ -78,12 +78,9 @@ class Client(object):
     # moves a line from file1 to file2
     def move(self, line_to_move, file_name1, file_name2):
 
-        #print('Moving %s from %s to %s' % (line_to_move, file_name1, file_name2))
-
         # removes the line in file1 (opens, removes, rewrites)
         read_handler = open(file_name1, 'r')
         to_remove = [line.strip() for line in read_handler.readlines()]
-        #print('%s' % line_to_move, to_remove)
         to_remove.remove(line_to_move)
         read_handler.close()
 
