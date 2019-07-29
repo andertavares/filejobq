@@ -26,6 +26,7 @@ class Client(object):
             # if job is currently running, checks if it has finished
             if self.job is not None:
                 if self.job.poll() is not None: # terminated!
+                    print("Job '%s' finished." % self.job_command)
                     self.mark_finished()
                     self.job = None
                     self.job_command = None
@@ -87,7 +88,7 @@ class Client(object):
         read_handler.close()
 
         rewrite_handler = open(file_name1, 'w')
-        rewrite_handler.writelines(to_remove)
+        rewrite_handler.writelines(['%s\n' % line for line in to_remove])
         rewrite_handler.close()
 
         # appends the line to file2
