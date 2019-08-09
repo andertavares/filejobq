@@ -61,33 +61,36 @@ class Client(object):
                     self.attempts = 0
 
     def find_job(self):
-        with self.lock():
+        self.lock()
 
-            # grabs a job
-            todo_handler = open(self.todo, 'r')
-            first_line = todo_handler.readline(4096).strip()
-            if first_line is not None and first_line != '':
+        # grabs a job
+        todo_handler = open(self.todo, 'r')
+        first_line = todo_handler.readline(4096).strip()
+        if first_line is not None and first_line != '':
 
-                # there's a valid job in the file, retrieves and runs it
-                self.job_command = first_line
+            # there's a valid job in the file, retrieves and runs it
+            self.job_command = first_line
 
-                print("Starting job '%s'" % self.job_command)
+            print("Starting job '%s'" % self.job_command)
 
-                # grabs the job, starts it and returns it
-                self.job = subprocess.Popen(
-                    self.job_command,
-                    shell=True
-                )
+            # grabs the job, starts it and returns it
+            self.job = subprocess.Popen(
+                self.job_command,
+                shell=True
+            )
 
-            todo_handler.close()
-            if self.job is not None:  # if I found a job, move it to in progress
-                self.move(self.job_command, self.todo, self.in_progress)
+        todo_handler.close()
+        if self.job is not None:  # if I found a job, move it to in progress
+            self.move(self.job_command, self.todo, self.in_progress)
+
+        self.unlock()
 
     def mark_finished(self):
 
         print("Job '%s' finished." % self.job_command)
-        with self.lock():
-            self.move(self.job_command, self.in_progress, self.done)
+        self.lock()
+        self.move(self.job_command, self.in_progress, self.done)
+        self.unlock()
 
         # updates my statistics
         self.job = None
@@ -118,20 +121,20 @@ class Client(object):
 
         while True:
             try:
-                fd = os.open(self.lock_file, os.O_CREAT | os.O_EXCL)
-                break
+                with open(self.lock_file, 'w') as f:
+                    f.write("dir locked\n")
+                    break
             except FileExistsError:
                 if timeout is not None and datetime.now() >= deadline:
                     raise
                 print('Directory %s is locked, will retry on %.2f seconds' % (self.basedir, retry_time))
                 time.sleep(retry_time)
 
-        yield  # lock acquired, let the user do whatever it needs to do
+    def unlock(self):
+        #try:  # user has finished: unlock
+        os.unlink(self.lock_file)#os.close(fd)
+        #finally:
 
-        try:  # user has finished: unlock
-            os.close(fd)
-        finally:
-            os.unlink(self.lock_file)
 
 
         '''while os.path.exists(self.lock_file): # waits until the directory is free
