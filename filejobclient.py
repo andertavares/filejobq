@@ -11,6 +11,10 @@ from datetime import datetime, timedelta
 class Client(object):
 
     def __init__(self, basedir):
+        """
+        Instantiates the file job client
+        :param basedir: directory where todo.txt is located (a simple text file with one command per line)
+        """
         self.job_command = None
         self.job = None
         self.basedir = basedir
@@ -25,6 +29,11 @@ class Client(object):
         self.finished_jobs = 0
 
     def run(self, max_jobs=0):
+        """
+        Runs the file job client to execute a number of jobs
+        :param max_jobs: number of jobs to execute (0 = unlimited)
+        :return:
+        """
 
         while True:
             # if I have finished as many jobs as I want, halt.
@@ -60,6 +69,11 @@ class Client(object):
                     self.attempts = 0
 
     def find_job(self):
+        """
+        Tries to start the job at the first line of todo.txt.
+        If successful, moves the job to doing.txt
+        :return:
+        """
         with self.lock():
             # grabs a job
             todo_handler = open(self.todo, 'r')
@@ -82,7 +96,10 @@ class Client(object):
                 self.move(self.job_command, self.todo, self.in_progress)
 
     def mark_finished(self):
-
+        """
+        Marks the job as finished (i.e.: moves it from doing.txt to done.txt)
+        :return:
+        """
         print("Job '%s' finished." % self.job_command)
         with self.lock():
             self.move(self.job_command, self.in_progress, self.done)
@@ -95,6 +112,13 @@ class Client(object):
     # moves a line from file1 to file2
     @staticmethod
     def move(line_to_move, file_name1, file_name2):
+        """
+        Moves a command (a line in a file) from a file to another
+        :param line_to_move: the line to be moved (must exist on the origin file)
+        :param file_name1: source file name
+        :param file_name2: destination file name
+        :return:
+        """
 
         # removes the line in file1 (opens, removes, rewrites)
         read_handler = open(file_name1, 'r')
@@ -113,7 +137,7 @@ class Client(object):
     @contextmanager
     def lock(self, timeout=None, retry_time=0.5):
         """
-        Locks a directory for safe multiprocess usage.
+        Provides mutex lock in self.basedir for safe multiprocess usage.
         Usage:
         with self.lock():
             do your stuff
