@@ -3,7 +3,6 @@
 import os.path
 import time
 import argparse
-from pathlib import Path
 import subprocess
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -35,7 +34,7 @@ class Client(object):
 
             # if job is currently running, checks if it has finished
             if self.job is not None:
-                if self.job.poll() is not None: # terminated!
+                if self.job.poll() is not None:  # terminated!
                     self.mark_finished()
 
                 else:  # job is running, wait a bit
@@ -61,36 +60,32 @@ class Client(object):
                     self.attempts = 0
 
     def find_job(self):
-        self.lock()
+        with self.lock():
+            # grabs a job
+            todo_handler = open(self.todo, 'r')
+            first_line = todo_handler.readline(4096).strip()
+            if first_line is not None and first_line != '':
 
-        # grabs a job
-        todo_handler = open(self.todo, 'r')
-        first_line = todo_handler.readline(4096).strip()
-        if first_line is not None and first_line != '':
+                # there's a valid job in the file, retrieves and runs it
+                self.job_command = first_line
 
-            # there's a valid job in the file, retrieves and runs it
-            self.job_command = first_line
+                print("Starting job '%s'" % self.job_command)
 
-            print("Starting job '%s'" % self.job_command)
+                # grabs the job, starts it and returns it
+                self.job = subprocess.Popen(
+                    self.job_command,
+                    shell=True
+                )
 
-            # grabs the job, starts it and returns it
-            self.job = subprocess.Popen(
-                self.job_command,
-                shell=True
-            )
-
-        todo_handler.close()
-        if self.job is not None:  # if I found a job, move it to in progress
-            self.move(self.job_command, self.todo, self.in_progress)
-
-        self.unlock()
+            todo_handler.close()
+            if self.job is not None:  # if I found a job, move it to in progress
+                self.move(self.job_command, self.todo, self.in_progress)
 
     def mark_finished(self):
 
         print("Job '%s' finished." % self.job_command)
-        self.lock()
-        self.move(self.job_command, self.in_progress, self.done)
-        self.unlock()
+        with self.lock():
+            self.move(self.job_command, self.in_progress, self.done)
 
         # updates my statistics
         self.job = None
@@ -98,7 +93,8 @@ class Client(object):
         self.finished_jobs += 1
 
     # moves a line from file1 to file2
-    def move(self, line_to_move, file_name1, file_name2):
+    @staticmethod
+    def move(line_to_move, file_name1, file_name2):
 
         # removes the line in file1 (opens, removes, rewrites)
         read_handler = open(file_name1, 'r')
@@ -114,54 +110,19 @@ class Client(object):
         file2_handler = open(file_name2, 'a')
         file2_handler.write('%s\n' % line_to_move)
 
+    @contextmanager
     def lock(self, timeout=None, retry_time=0.5):
+        """
+        Locks a directory for safe multiprocess usage.
+        Usage:
+        with self.lock():
+            do your stuff
+        at this level of indentation, lock is released
 
-        if timeout is not None:
-            deadline = datetime.now() + timedelta(seconds=timeout)
+        (adapted from https://codereview.stackexchange.com/a/150237)
 
-        while True:
-            try:
-                with open(self.lock_file, 'w') as f:
-                    f.write("dir locked\n")
-                    break
-            except FileExistsError:
-                if timeout is not None and datetime.now() >= deadline:
-                    raise
-                print('Directory %s is locked, will retry on %.2f seconds' % (self.basedir, retry_time))
-                time.sleep(retry_time)
-
-    def unlock(self):
-        #try:  # user has finished: unlock
-        os.unlink(self.lock_file)#os.close(fd)
-        #finally:
-
-
-
-        '''while os.path.exists(self.lock_file): # waits until the directory is free
-            print("Directory is locked. ")
-            time.sleep(1)
-            continue
-        
-        # locks the dir
-        Path(self.lock_file).touch()'''
-
-
-    def unlock(self):
-        os.remove(self.lock_file)
-
-    '''@contextmanager
-    def exclusive_open(self, filename, *args, timeout=None, retry_time=0.5, **kwargs):
-        """Open a file with exclusive access across multiple processes.
-        Requires write access to the directory containing the file.
-        (source=https://codereview.stackexchange.com/a/150237)
-
-        Arguments are the same as the built-in open, except for two
-        additional keyword arguments:
-
-        timeout -- Seconds to wait before giving up (or None to retry indefinitely).
-        retry_time -- Seconds to wait before retrying the lock.
-
-        Returns a context manager that closes the file and releases the lock.
+        :param timeout: Seconds to wait before giving up (or None to retry indefinitely).
+        :param retry_time: Seconds to wait before retrying the lock.
 
         """
         if timeout is not None:
@@ -170,21 +131,19 @@ class Client(object):
         while True:
             try:
                 fd = os.open(self.lock_file, os.O_CREAT | os.O_EXCL)
-                break
+                yield   # lock acquired, user can do whatever it needs
+                break   # gets out of while True to release the lock
             except FileExistsError:
                 if timeout is not None and datetime.now() >= deadline:
                     raise
                 time.sleep(retry_time)
 
+        # releases the lock
         try:
-            with open(filename, *args, **kwargs) as f:
-                yield f
+            os.close(fd)
         finally:
-            try:
-                os.close(fd)
-            finally:
-                os.unlink(self.lock_file)
-'''
+            os.unlink(self.lock_file)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
